@@ -18,6 +18,8 @@
 ## Regla clave: avance por fases
 Cuando trabajemos en un pipeline largo (ej. un shot VFX completo), avanza **UNA FASE por sesión**, no intentes resolver el pipeline entero de golpe. Esto evita timeouts y respuestas descuidadas.
 
+Consultar `04_Pipeline_General/Version_Reference.md` antes de proponer nodos/parámetros específicos de Houdini o Nuke.
+
 ## Documentación
 - Cada shot o proyecto tiene su propio `notes.md` siguiendo la plantilla `99_Templates/Template_Shot.md`.
 - Cada sesión de trabajo se registra con la plantilla `99_Templates/Template_Sesion_Produccion.md`.
