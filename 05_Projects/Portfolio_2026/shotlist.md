@@ -12,6 +12,9 @@ Lista maestra de shots del portfolio. Cada shot tiene su propia sección siguien
 ### Descripción
 Pyro + char/scorch progresivo en terreno + elemento sólido secundario ardiendo.
 
+### Referencia técnica
+[[Pipeline_Bandera_Ardiendo_Vellum_Pyro]] — pipeline base reutilizable. Adaptar la lógica de `@burn`/`@burn_edge`/Blackbody (pensada para tela ardiendo) a char/scorch progresivo en terreno + el elemento sólido secundario de este shot.
+
 ### Decisiones tomadas
 
 ### Problemas resueltos
@@ -43,6 +46,9 @@ Fracturing (Voronoi/boolean), RBD de impacto, dust sourcing, debris fino con par
 
 ### Descripción
 FLIP, whitewater, foam, spray secundario.
+
+### Referencia técnica
+[[Simulacion_Cascada_FLIP_Universidad]] — referencia de setup FLIP/whitewater. Decisión ya tomada: no repetir escala de cascada grande, ir por un splash de objeto cayendo al agua a menor escala pero con más detalle de impacto.
 
 ### Decisiones tomadas
 
