@@ -1,5 +1,5 @@
 # Shot: Disparo en pared de cemento
-## Estado: En progreso — Fase 2 completada (RBD dinámico), pendiente Fase 3 (dust sourcing y debris fino)
+## Estado: Fases de simulación completas (blocking, RBD dinámico, dust/debris). Pendiente: Chipping de bordes (secundario, ligero, antes de shading) + fase final de shading/render.
 ## Última sesión: 2026-07-16
 
 ### Descripción
@@ -48,6 +48,27 @@ Fracturing (Voronoi/boolean), RBD de impacto, dust sourcing, debris fino con par
    - Collision: Collision Shape=Convex Hull.
    - Constraints: Scale [Strength] by Attribute=`strength` (ON), Propagation Rate=0.35, Propagation Iterations=2-3, Half-Life=0.15s.
 
+### Decisiones tomadas — Fase 3
+- **Debris fino como sistema separado, no más piezas Voronoi**: réplica del patrón de 3 nodos del shelf tool "Debris" de SideFX (Debris Source → POP network → import) — el debris fino se comporta como partículas ligeras con drag/turbulencia, distinto físicamente del RBD grueso (que usa Density/Friction/Bounce de Fase 2 para leerse pesado). Filtrado por Speed Threshold y Volume Threshold en Debris Source SOP para que solo emita desde las piezas rápidas y pequeñas cerca del eje de impacto (reutiliza `v` de Fase 2 como driver, no lógica duplicada).
+- **Interior Group necesario**: Debris Source SOP necesita un grupo de caras interiores explícito. Se nombra `interior` en el parámetro "Interior Group" de la Voronoi Fracture SOP (`fractured_wall`, Fase 1) y se referencia igual en Debris Source — sin esto el nodo no tiene de dónde sacar puntos.
+- **Timing del polvo en 3 capas encadenadas**: (1) ráfaga central inmediata con `v` inicial (Fase 2), (2) anillos que rompen con retraso por propagación de glue (Fase 2), (3) densidad de polvo por pieza que crece en ~8 frames desde el momento exacto de separación de cada pieza vía `@age` de Debris Source (`grow = 1-exp(-age/8)`), no desde un frame global. Evita que el polvo aparezca instantáneo y limpio.
+- **Cohesión de la nube**: Pyro Solver con `Viscosity` media-alta (parámetro documentado explícitamente para dar "a more coherent velocity field, creating a more flowing look"), `Buoyancy Scale` baja (polvo frío/pesado, no debe subir como humo de fuego), `Turbulence`/`Shredding`/`Disturbance` bajos-moderados (detalle sin deshilachar la masa), `Dissipation` lenta + `Clamp Below` activo.
+- **Colisión física del polvo con los fragmentos**: Pyro Source Pack (Input=Rigid Body Pieces) desde `rbd_bullet_solver`, Collision Type=SDF + Volume Velocity + Packed Sets — el humo se empuja por los trozos que caen en vez de atravesarlos.
+- **Pendiente reconciliado**: en el "Siguiente paso" de Fase 2 se anotó Chipping (desportillado de bordes, tab de "Working with concrete") como parte de Fase 3 — el alcance real de esta sesión fue solo dust sourcing + debris fino (partículas). Chipping queda pendiente explícitamente, es geometría estática, se hará como paso ligero antes/durante shading, no bloquea el cierre de fases de simulación.
+
+### Setup de nodos — Fase 3
+1. `debris_source` (Debris Source SOP) — input=geometría simulada de `rbd_bullet_solver`. Interior Group=`interior`, Speed Threshold filtra piezas rápidas, Volume Threshold excluye piezas grandes/lentas del anillo ancla.
+2. `debris_popnet` (POP Network) — POP Source lee `debris_source`, hereda `v`; dispersión angular extra ±10-15° sobre la dirección heredada (el cono de 25-50° ya viene dado por la selección de piezas rápidas cercanas al eje); Drag/resistencia del aire moderada; Life Span ~1-2s; copia geometría de esquirlas pequeñas con variación de escala/rotación sobre partículas supervivientes.
+3. `dust_density_ramp` (Attribute Wrangle sobre puntos de `debris_source`) — `grow = 1-exp(-@age/8)`, `density = grow * @density` (density nativo de Debris Source decae 1→0 tras separación).
+4. `dust_rasterize` (Volume Rasterize Attributes SOP) — Group=puntos de `dust_density_ramp`, Attributes=`density` → VDB fuente para Pyro.
+5. `pyro_source_pack` (Pyro Source Pack) — Input=Rigid Body Pieces, desde `rbd_bullet_solver`.
+6. `pyro_solver` (Pyro Solver SOP) — Source Volume=`dust_rasterize`, Collision=`pyro_source_pack` con Collision Type=SDF + Volume Velocity + Packed Sets. Viscosity media-alta, Buoyancy Scale baja, Turbulence/Shredding/Disturbance bajos-moderados, Dissipation lenta, Clamp Below activo.
+
+### Crítico técnico (antes de shading)
+- **Escala**: correcta en todo el pipeline (unidades físicas reales desde Fase 1 — 0.25m muro, 2400 kg/m³, m/s, gravedad -9.81). Sin banderas rojas.
+- **Timing**: ya no es plano — tres capas de delay encadenadas (ráfaga inicial → propagación de glue → crecimiento de polvo por pieza). Revisar en playblast si los 8 frames de `grow` funcionan con el framerate/lente real antes de shading; es el único valor puesto "a ojo" de toda la fase.
+- **Secundarios**: cubiertos (debris fino + polvo). Chipping de bordes pendiente (ver "Pendiente reconciliado" arriba) — sin él, las piezas grandes de RBD pueden leerse con cortes demasiado limpios/geométricos en close-up.
+
 ### Problemas resueltos
 (ninguno todavía — fase de blocking inicial sin iteración)
 
@@ -74,7 +95,8 @@ No encontré un breakdown específico de Ian Farnsworth sobre impacto de bala en
 3. **Debris/dust fino** — partículas sembradas en las grietas de fractura en el momento de la ruptura (Debris Source SOP), alimentando tanto debris sólido pequeño (POP) como la fuente de humo/polvo (Pyro). Confirma que el pipeline ya anotado en Fase 1 (Debris Source SOP + tutorial de dust pyro) es el enfoque estándar, no un extra opcional — sin el nivel 2 y 3, un RBD grueso solo se lee como "genérico de portfolio".
 
 ### Siguiente paso
-**Fase 3 (dust sourcing y debris fino)**: sembrar Debris Source SOP en las grietas/superficies de fractura de `rbd_bullet_solver` en el momento de la ruptura, alimentando (a) debris sólido pequeño vía POPs y (b) fuente de humo/polvo Pyro. Aplicar el delay respecto a los fragmentos gruesos ya anotado en la referencia física de Fase 1 (la nube de polvo fino llega después de la eyección de fragmentos gruesos, no en el mismo frame). Añadir Chipping (tab de "Working with concrete" de SideFX) a las piezas de RBD grueso como nivel de detalle intermedio antes de pasar a shading — sin esto, según la crítica técnica del rol de crítico, el RBD se lee como "genérico de portfolio".
+**Pre-shading (ligero)**: Chipping de bordes (tab de "Working with concrete" de SideFX, Edge Detail/Noise Height) sobre las piezas de RBD grueso de `rbd_bullet_solver` — geometría estática, no simulación, pendiente desde Fase 3 (ver "Pendiente reconciliado").
+**Fase final — Shading/render**: aplicar el rol de crítico técnico completo antes de arrancar (ya iniciado en el crítico técnico de Fase 3) y definir shaders de hormigón fracturado, polvo (Pyro shading, density/color), e iluminación de la escena.
 
 ### Fuentes consultadas
 - [SideFX — Fracturing objects for simulation](https://www.sidefx.com/docs/houdini/dyno/fracturing.html) — workflow general de pre-fractura en SOPs.
@@ -109,3 +131,13 @@ No encontré un breakdown específico de Ian Farnsworth sobre impacto de bala en
 - SideFX — [Connect Adjacent Pieces geometry node](https://www.sidefx.com/docs/houdini/nodes/sop/connectadjacentpieces.html) — Connection Type (closest point / surface points centroid / raw points), Search Radius, Max Connections; usado para construir la red de constraints entre piezas de Fase 1.
 - SideFX — [RBD Constraint Properties 2.0 geometry node](https://www.sidefx.com/docs/houdini/nodes/sop/rbdconstraintproperties.html) — confirma que `strength` es un atributo de primitiva sobre la propia geometría de constraint (no sobre las piezas), requiere `constraint_name` como atributo de primitiva string.
 - SideFX — [Attribute Promote geometry node](https://www.sidefx.com/docs/houdini/nodes/sop/attribpromote.html) — confirma soporte de "Piece Attribute" para agrupar y promediar por un atributo arbitrario (`name`) en vez de solo por clase estándar; usado para calcular un centroide único y coherente por pieza.
+
+**Sesión 2026-07-16 — Fase 3 (dust sourcing y debris fino):**
+- SideFX — [Debris Source geometry node](https://www.sidefx.com/docs/houdini/nodes/sop/debrissource.html) — parámetros verificados: Speed Threshold, Volume Threshold, Depth Threshold, Interior Group; atributos de salida Age, Released, Distance, Rest Position, Volume, Density (decae 1→0 tras separación, "útil para fuentes de pyro").
+- SideFX — [Packed RBD sources - Pyro simulation](https://www.sidefx.com/docs/houdini/pyro/packedrbd.html) — workflow oficial de sourcing de Pyro desde piezas RBD: nodo Pyro Source Pack (Input=Rigid Body Pieces), colisión Collision Type=SDF + Volume Velocity + Packed Sets.
+- SideFX — [Debris shelf tool](https://www.sidefx.com/docs/houdini/shelf/debris.html) — confirma la estructura estándar de 3 nodos (Debris Source → Debris Sim DOP/POP → Import Debris) como sistema de partículas separado del RBD grueso, no más piezas Voronoi.
+- SideFX — [Volume Rasterize Attributes geometry node](https://www.sidefx.com/docs/houdini/nodes/sop/volumerasterizeattributes.html) — nodo usado para convertir puntos con atributos float/vector en volúmenes VDB fuente para Pyro.
+- SideFX — [Pyro Solver geometry node](https://www.sidefx.com/docs/houdini/nodes/sop/pyrosolver.html) — parámetros verificados textualmente: Dissipation, Clamp Below, Disturbance, Turbulence, Shredding, Buoyancy Scale, Flame Expansion/Add Expansion, Viscosity ("higher values result in a more coherent velocity field, creating a more flowing look" — base de la decisión de cohesión de la nube).
+- SideFX — [Voronoi Fracture geometry node](https://www.sidefx.com/docs/houdini/nodes/sop/voronoifracture.html) — confirmado parámetro "Interior Group" para nombrar el grupo de caras interiores creadas al fracturar, requerido por Debris Source.
+- SideFX — [Pyro Source geometry node](https://www.sidefx.com/docs/houdini/nodes/sop/pyrosource.html) — revisado para parámetros de emisión (Group, Mode, Particle Separation, Particle Scale); no se encontraron nombres verbatim de parámetros de escalado de densidad/temperatura por atributo en la documentación disponible — queda como hueco de referencia si se necesita ajuste fino en shading.
+- Nota: no se encontró contenido técnico extraíble del tutorial oficial en video [Dust Pyro Smoke from Destruction Simulation](https://www.sidefx.com/tutorials/dust-pyro-smoke-from-destruction-simulation-using-houdinis-shelf-tool/) (página de video, sin transcript textual) ni de blogs de terceros consultados (bubblepins.com) más allá de confirmar el concepto general ya cubierto por la documentación oficial.
