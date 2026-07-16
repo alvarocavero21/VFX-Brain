@@ -1,5 +1,5 @@
 # Shot: Disparo en pared de cemento
-## Estado: Fases de simulación completas (blocking, RBD dinámico, dust/debris). Pendiente: Chipping de bordes (secundario, ligero, antes de shading) + fase final de shading/render.
+## Estado: Shot completo end-to-end — blocking, RBD dinámico, dust/debris, chipping estático y shading MaterialX/Karma XPU. Pendiente: lookdev iterativo (valores a ojo marcados abajo) y render final.
 ## Última sesión: 2026-07-16
 
 ### Descripción
@@ -69,6 +69,34 @@ Fracturing (Voronoi/boolean), RBD de impacto, dust sourcing, debris fino con par
 - **Timing**: ya no es plano — tres capas de delay encadenadas (ráfaga inicial → propagación de glue → crecimiento de polvo por pieza). Revisar en playblast si los 8 frames de `grow` funcionan con el framerate/lente real antes de shading; es el único valor puesto "a ojo" de toda la fase.
 - **Secundarios**: cubiertos (debris fino + polvo). Chipping de bordes pendiente (ver "Pendiente reconciliado" arriba) — sin él, las piezas grandes de RBD pueden leerse con cortes demasiado limpios/geométricos en close-up.
 
+### Decisiones tomadas — Chipping y shading final
+- **El chipping se hornea en rest-space, no post-sim**: aunque conceptualmente "se aplica sobre el resultado de Fase 2/3", la técnica correcta (confirmada en la documentación oficial de RBD Interior Detail SOP: "designed as a pre-simulation enhancement tool... Transform Pieces SOP can be used to transform high resolution pieces according to the motion of simulated low resolution pieces") es hornear el detalle una sola vez en el espacio de reposo de cada pieza, y luego reaplicar el movimiento ya simulado encima con Transform Pieces SOP (matching por `name`). Aplicarlo directamente sobre la geometría ya transformada por frame haría que el detalle "nadara" sobre la pieza en movimiento.
+- **Solo piezas activas reciben detalle**: se filtra a `active==1` (atributo de Fase 2) antes de añadir Interior Detail/chips — las piezas del anillo ancla nunca se ven romperse de cerca, no justifican el coste.
+- **Esquirlas como geometría scatter+copy, no como réplica del boolean-cutting de RBD Material Fracture**: el mecanismo real del tab "Chipping" de RBD Material Fracture (planos de corte booleanos con ruido direccional en las esquinas) es demasiado para replicar a mano en esta sesión — en su lugar, geometría de chip real (Scatter + Copy to Points sobre el grupo `interior`) cumple el pedido literal ("añadir geometría de esquirlas") con una técnica más simple y igualmente válida.
+- **PolyBevel descartado para esquinas rotas**: no soporta ruido/irregularidad en el perfil del bisel (verificado en documentación), no sirve para un look de esquina astillada.
+- **Base color y roughness conducidos por datos de la propia fractura, no valores planos**: MtlX Geompropvalue lee el grupo `interior` (ya usado en Fase 1/3) como máscara para mezclar un tono "hormigón fresco/roto" (caras interior/chips) contra un tono "intemperie" (resto de la superficie) — reutiliza la distinción interior/exterior de todo el pipeline en vez de un color arbitrario.
+- **Displacement solo en la cara exterior**: las caras interior/chips ya tienen desplazamiento geométrico real (RBD Interior Detail, Parte 1) — el MtlX Displacement por shading solo cubre la cara exterior original del muro, donde no hay geo añadida, evitando duplicar coste.
+- **Displacement Style = "True Displacement"**: verificado como uno de los 4 valores exactos del parámetro (Render Geometry Settings LOP → Karma → Dicing → Displacement Style: `Displacement as Bump`, `True Displacement`, `Disable Displacement Shader`, `Bump Added to Displacement`) — los otros tres no generan geometría real.
+- **Displacement escalar/float, no vectorial**: requisito confirmado de Karma XPU (solo soporta MtlX Standard Surface/OpenPBR con displacement float; vector displacement no funciona ahí).
+
+### Setup de nodos — Chipping (estático, pre-sim + Transform Pieces)
+1. `hires_active_pieces` (Blast/Group SOP) — filtra `impact_kinematics` (Fase 2) a `active==1`.
+2. `rbd_interior_detail` (RBD Interior Detail SOP) — Interior Group=`interior`, Add Detail=ON, Detail Size pequeño, Noise Amplitude pequeña, Frequency media-alta, Fractal Type=Standard, Depth Method=Minimum Distance to Exterior, Clamp Displacement Amount to Depth=ON.
+3. `chip_scatter` (Scatter SOP) — Group=`interior`, densidad baja escalada por área de pieza.
+4. `chip_copy` (Copy to Points SOP) — 3-4 variantes de esquirla low-poly sobre `chip_scatter`, `pscale`/`orient` randomizados.
+5. `transform_pieces` (Transform Pieces SOP) — Input1=merge(`rbd_interior_detail`, `chip_copy`), Template=salida de `rbd_bullet_solver`, matching attribute=`name`.
+
+### Setup de nodos — Shading MaterialX / Karma XPU
+En `/mat`: Material Library LOP → Karma MaterialX Builder.
+1. `geompropvalue_interior` (MtlX Geompropvalue) — lee grupo/atributo `interior` como máscara.
+2. `mix_basecolor` (MtlX Mix) — mezcla tono "roto/fresco" vs "intemperie" según la máscara de `interior`.
+3. `noise3d_rough` (MtlX Noise3D) → `range` (MtlX Range, remap ~0.6-0.85) → `specular_roughness`.
+4. `mtlx_standard_surface` (MtlX Standard Surface) — base_color=`mix_basecolor`, specular_roughness=`range`, metalness=0.
+5. `mtlx_position` → `mtlx_multiply` (escala espacio) → `mtlx_noise3d_disp` (MtlX Noise3D) → `mtlx_displacement` (MtlX Displacement, escalar) — solo para la cara exterior.
+6. `mtlx_surface_material` (MtlX Surface Material) — surface=`mtlx_standard_surface`, displacement=`mtlx_displacement`.
+7. Asignar material al muro en `/stage`.
+8. `Render Geometry Settings` LOP — Primitives=muro, Displacement Style=`True Displacement`, Dicing Quality alta (plano macro cercano).
+
 ### Problemas resueltos
 (ninguno todavía — fase de blocking inicial sin iteración)
 
@@ -95,8 +123,11 @@ No encontré un breakdown específico de Ian Farnsworth sobre impacto de bala en
 3. **Debris/dust fino** — partículas sembradas en las grietas de fractura en el momento de la ruptura (Debris Source SOP), alimentando tanto debris sólido pequeño (POP) como la fuente de humo/polvo (Pyro). Confirma que el pipeline ya anotado en Fase 1 (Debris Source SOP + tutorial de dust pyro) es el enfoque estándar, no un extra opcional — sin el nivel 2 y 3, un RBD grueso solo se lee como "genérico de portfolio".
 
 ### Siguiente paso
-**Pre-shading (ligero)**: Chipping de bordes (tab de "Working with concrete" de SideFX, Edge Detail/Noise Height) sobre las piezas de RBD grueso de `rbd_bullet_solver` — geometría estática, no simulación, pendiente desde Fase 3 (ver "Pendiente reconciliado").
-**Fase final — Shading/render**: aplicar el rol de crítico técnico completo antes de arrancar (ya iniciado en el crítico técnico de Fase 3) y definir shaders de hormigón fracturado, polvo (Pyro shading, density/color), e iluminación de la escena.
+**Shot completo end-to-end.** Queda como trabajo de iteración/lookdev, no de pipeline nuevo:
+- Lookdev del shading (colores/roughness de `mix_basecolor` y `range` son valores de partida, ajustar en playblast/render de prueba).
+- Shading del volumen de polvo (Pyro density/color/iluminación) — no cubierto en esta sesión, centrada en el hormigón.
+- Iluminación de la escena y render final en Karma XPU.
+- Dicing Quality de Displacement Style="True Displacement" puede necesitar ajuste según tiempo de render real observado.
 
 ### Fuentes consultadas
 - [SideFX — Fracturing objects for simulation](https://www.sidefx.com/docs/houdini/dyno/fracturing.html) — workflow general de pre-fractura en SOPs.
@@ -141,3 +172,13 @@ No encontré un breakdown específico de Ian Farnsworth sobre impacto de bala en
 - SideFX — [Voronoi Fracture geometry node](https://www.sidefx.com/docs/houdini/nodes/sop/voronoifracture.html) — confirmado parámetro "Interior Group" para nombrar el grupo de caras interiores creadas al fracturar, requerido por Debris Source.
 - SideFX — [Pyro Source geometry node](https://www.sidefx.com/docs/houdini/nodes/sop/pyrosource.html) — revisado para parámetros de emisión (Group, Mode, Particle Separation, Particle Scale); no se encontraron nombres verbatim de parámetros de escalado de densidad/temperatura por atributo en la documentación disponible — queda como hueco de referencia si se necesita ajuste fino en shading.
 - Nota: no se encontró contenido técnico extraíble del tutorial oficial en video [Dust Pyro Smoke from Destruction Simulation](https://www.sidefx.com/tutorials/dust-pyro-smoke-from-destruction-simulation-using-houdinis-shelf-tool/) (página de video, sin transcript textual) ni de blogs de terceros consultados (bubblepins.com) más allá de confirmar el concepto general ya cubierto por la documentación oficial.
+
+**Sesión 2026-07-16 — Chipping y shading final:**
+- SideFX — [RBD Interior Detail geometry node](https://www.sidefx.com/docs/houdini/nodes/sop/rbdinteriordetail.html) — parámetros verificados (Interior Group, Noise Amplitude, Frequency, Fractal Type, Depth Method, Clamp Displacement Amount to Depth); confirmado como herramienta pre-simulación, con Transform Pieces SOP como mecanismo documentado para reaplicar el movimiento simulado sobre geometría de alta resolución.
+- SideFX — [Transform Pieces geometry node](https://www.sidefx.com/docs/houdini/nodes/sop/xformpieces.html) — confirma matching de geometría de detalle contra el resultado de simulación por atributo `name`; caso de uso documentado explícitamente para geo de alta resolución sobre RBD de baja resolución.
+- SideFX — [PolyBevel geometry node](https://www.sidefx.com/docs/houdini/nodes/sop/polybevel.html) — verificado que no soporta ruido/irregularidad en el perfil del bisel; descartado para esquinas rotas.
+- SideFX — [RBD Material Fracture 3.0 geometry node](https://www.sidefx.com/docs/houdini/nodes/sop/rbdmaterialfracture.html) — tab Chipping revisado para entender el mecanismo real (planos de corte booleanos con ruido direccional en corners), no replicado 1:1 por complejidad; se optó por scatter+copy de geometría de esquirla en su lugar.
+- SideFX — [Using MaterialX in Solaris](https://www.sidefx.com/docs/houdini/solaris/materialx.html) — workflow confirmado: Material Library LOP → Karma MaterialX Builder → MtlX Standard Surface → MtlX Surface Material; texturas vía MtlX Texcoord + MtlX Image; displacement por rama separada al input `displacement` del Material node.
+- SideFX — [Karma XPU](https://www.sidefx.com/docs/houdini/solaris/karma_xpu.html) — confirmado: solo shaders MaterialX (no VEX/OSL); displacement limitado a MtlX Standard Surface/MtlX OpenPBR Surface, solo escalar/float (no vector displacement).
+- SideFX — [Render Geometry Settings geometry node](https://www.sidefx.com/docs/houdini/nodes/lop/rendergeometrysettings.html) — parámetro "Displacement Style" verificado con sus 4 valores exactos (Displacement as Bump, True Displacement, Disable Displacement Shader, Bump Added to Displacement), ubicado en sección Karma → Dicing.
+- SideFX — [MtlX Geometry Property Value VOP node](https://www.sidefx.com/docs/houdini/nodes/vop/mtlxgeompropvalue.html) — confirma lectura de primvars/grupos arbitrarios para conducir mezclas de shading (usado para leer el grupo `interior`).
