@@ -22,20 +22,21 @@ Documento de referencia para seguir el shot en Houdini 22 y consultar dudas. Cad
 
 **Objetivo**: geometría del muro, punto de impacto, y fractura Voronoi concentrada cerca del disparo.
 
-### Grafo de nodos
+### Grafo de nodos — real, verificado en Houdini
 ```
-Box (muro 4×3×0.25m)
-  → Cutter (cráter + túnel de entrada, sin perforar completamente)
-  → Boolean Subtract
-  → Voronoi Fracture Points (densidad concentrada en impact_point)
-  → Voronoi Fracture (fragmentación final)
+box1 (muro 4×3×0.25m, Translate Y=1.5)
+sphere1 (marcador visual del impacto, sin conectar a la fractura)
+box1 → scatter1 (2000 pts uniformes)
+     → attribwrangle1 (cull por probabilidad → ~65 pts concentrados cerca del impacto)
+box1 (input 1) + attribwrangle1 (input 2) → fractured_wall (Voronoi Fracture)
 ```
+**Nota**: este grafo reemplaza una versión anterior de esta guía que planteaba un `Cutter` booleano (cráter + túnel) y un `Voronoi Fracture Points` con inputs de impacto dedicados. En la práctica se optó por el enfoque más simple de scatter uniforme + cull por distancia, sin ningún corte booleano de agujero de bala — la "lectura" de impacto viene solo de la concentración de piezas pequeñas.
 
 ### Decisiones clave
-- **Muro**: 4m × 3m × 0.25m — proporción realista de un muro de carga.
-- **Punto de impacto**: definido como punto de referencia (`impact_point`) reutilizado en todas las fases siguientes.
-- **Cráter + túnel sin perforar**: el muro es grueso, la bala no lo atraviesa — decisión artística coherente con "muro que aguanta".
-- **Densidad de fractura no uniforme**: piezas pequeñas cerca del impacto, grandes hacia los bordes — evita el error típico de fractura uniforme que se ve "de kit".
+- **Muro**: 4m × 3m × 0.25m (`box1`, `Translate` = `(0, 1.5, 0)`) — proporción realista de un muro de carga, base en Y=0.
+- **Punto de impacto**: `sphere1` en `(0, 1.7, -0.1)`, puramente visual — su posición se copia a mano como literal VEX (`impact_pos`) en `attribwrangle1` y en todos los wrangles de fases posteriores, no se conecta como input a ningún nodo.
+- **Sin cráter ni túnel perforado**: se descartó el enfoque booleano — la concentración de piezas pequeñas cerca del impacto ya comunica el disparo sin necesidad de cortar geometría.
+- **Densidad de fractura no uniforme**: `scatter1` dispersa 2000 puntos uniformes sobre `box1`; `attribwrangle1` los reduce a ~65 con `keep_prob = pow(1 - t, 4)` (t = distancia normalizada a 1 unidad), dejando piezas pequeñas cerca del impacto y grandes hacia los bordes — evita el error típico de fractura uniforme que se ve "de kit".
 - **Cámara**: posicionada con referencia a la velocidad de bala real, preparando el timing de la Fase 2.
 
 ---
@@ -59,7 +60,9 @@ fractured_wall (de Fase 1)
 
 ### 1. Cinemática de impacto (`impact_kinematics`, VEX)
 ```vex
-float dist = distance(@centroid, @impact_point);
+vector impact_pos = {0, 1.7, -0.1};   // valor real de sphere1 (Fase 1), literal VEX
+
+float dist = distance(@centroid, impact_pos);
 float impact_radius = 0.6;
 float active_radius = 0.8;
 float t = clamp(dist / impact_radius, 0, 1);

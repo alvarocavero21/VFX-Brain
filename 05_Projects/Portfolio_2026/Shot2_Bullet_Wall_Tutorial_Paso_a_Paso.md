@@ -8,79 +8,59 @@ Convención: cada dato verificado contra la documentación oficial de SideFX lle
 
 ## FASE 1 — Blocking y fractura base
 
-Contexto de red: todo dentro de un Geometry object, p.ej. `/obj/geo1`. Grafo: `wall_base → (crater_cone + tunnel → bullet_cutter) → entry_hole → fracture_points + fractured_wall`.
+Contexto de red: todo dentro de un Geometry object, p.ej. `/obj/geo1`. Grafo real, **verificado en Houdini** (reemplaza la versión anterior de este documento, que asumía un boolean de cráter+túnel y un `Voronoi Fracture Points` con inputs de impacto — eso no es lo que se construyó): `box1 → scatter1 → attribwrangle1 → fractured_wall` (input 2), y `box1 → fractured_wall` (input 1) directamente, sin ningún corte booleano de agujero de bala. `sphere1` es un objeto de referencia visual para el punto de impacto — no se conecta a la cadena de fractura, solo marca la posición que luego se copia a mano (como literal VEX) en `attribwrangle1` y en los wrangles de fases posteriores.
 
-### Nodo: wall_base
+### Nodo: box1
 
 1. **Nombre exacto en Tab menu**: `Box` (SOP).
 2. **Dónde colocarlo**: primer nodo de la cadena, dentro de `/obj/geo1`. Sin inputs.
-3. **Pestaña/parámetro/valor**: pestaña *Transform* → `Size` = `(4, 3, 0.25)`; `Center` = `(0, 1.5, 0)`.
+3. **Pestaña/parámetro/valor** *(valores reales verificados en Houdini)*: pestaña *Transform* → `Size` = `(4, 3, 0.25)`; `Translate` = `(0, 1.5, 0)`. Nota: se usó `Translate`, no `Center` — el efecto es el mismo (desplazar la caja hacia arriba para que la base quede en Y=0), pero es importante documentar el parámetro real usado, no el que se había planeado originalmente.
 4. **VEX**: no aplica.
-5. **Qué ver en el viewport**: una caja rectangular vertical, 4m de ancho × 3m de alto × 0.25m de grosor, con su base inferior a Y=1.375 (porque el center está en Y=1.5 con altura 3, así que va de Y=0 a Y=3). Debe leer como un muro de carga visto de frente.
+5. **Qué ver en el viewport**: una caja rectangular vertical, 4m de ancho × 3m de alto × 0.25m de grosor, con su base inferior exactamente en Y=0 y el techo en Y=3. Debe leer como un muro de carga visto de frente.
 
-### Nodo: impact_point
+### Nodo: sphere1
 
-1. **Nombre exacto en Tab menu**: `Null`.
-2. **Dónde colocarlo**: nodo independiente en `/obj/geo1`, no necesita input geométrico (se posiciona a mano). Se referencia como input 2 en `fracture_points` más adelante.
-3. **Pestaña/parámetro/valor**: pestaña *Transform* → `Translate` = `(0.35, 1.55, -0.125)`. Nota: Z=-0.125 corresponde a la cara frontal del muro (el muro tiene grosor 0.25 en Z centrado en Z=0, así que la cara -Z está exactamente en Z=-0.125).
+1. **Nombre exacto en Tab menu**: `Sphere` (SOP).
+2. **Dónde colocarlo**: nodo independiente en `/obj/geo1`, sin input. No alimenta la cadena de fractura — es puramente un marcador visual del punto de impacto en el viewport, y la referencia de la que se copió a mano el valor de `impact_pos` usado en el código VEX.
+3. **Pestaña/parámetro/valor** *(valores reales verificados en Houdini)*: pestaña *Transform* → `Translate` = `(0, 1.7, -0.1)`; `Scale` = `(0.15, 0.15, 0.4)` (elipsoide aplanado en Z, para sugerir la dirección de entrada de la bala aunque no se use para cortar geometría).
 4. **VEX**: no aplica.
-5. **Qué ver en el viewport**: un icono de Null (ejes) apoyado justo sobre la cara frontal del muro, ligeramente a la derecha y por debajo del centro vertical.
+5. **Qué ver en el viewport**: un pequeño elipsoide apoyado sobre la cara frontal del muro (Z=-0.1), a media altura, marcando visualmente dónde impacta la bala — sin que exista un agujero real todavía; el muro sigue siendo un sólido continuo en este punto.
 
-### Nodo: crater_cone
+### Nodo: scatter1
 
-1. **Nombre exacto en Tab menu**: `Tube`.
-2. **Dónde colocarlo**: nodo independiente en `/obj/geo1`, sin input (geometría procedural). Alimenta el input 1 de `bullet_cutter`.
-3. **Pestaña/parámetro/valor**: pestaña *Transform* → `Radius` (base) = `0.11`, `Radius` (top) = `0.02` (el Tube SOP tiene dos campos de radio, base y top); `Height` = `0.09`. Rotar 90° en X (pestaña *Transform* → `Rotate` = `(90, 0, 0)`) para que el eje del cono quede perpendicular a la cara del muro. Trasladarlo para que la boca ancha (radio 0.11) coincida con `impact_point`.
+1. **Nombre exacto en Tab menu**: `Scatter` (SOP).
+2. **Dónde colocarlo**: dentro de `/obj/geo1`, input = `box1`. Alimenta `attribwrangle1`.
+3. **Pestaña/parámetro/valor** *(valor real verificado en Houdini)*: `Force Total Count` = `2000`. Esto dispersa 2000 puntos por toda la superficie del muro, de forma uniforme — la concentración no uniforme cerca del impacto se logra después, en `attribwrangle1`, no aquí.
 4. **VEX**: no aplica.
-5. **Qué ver en el viewport**: un cono corto y ancho, como un embudo, con la boca grande apoyada en la cara frontal del muro sobre `impact_point` y el vértice metiéndose hacia el interior del muro.
+5. **Qué ver en el viewport**: una nube uniforme de 2000 puntos cubriendo toda la superficie del muro, sin ninguna concentración todavía.
 
-### Nodo: tunnel
+### Nodo: attribwrangle1
 
-1. **Nombre exacto en Tab menu**: `Tube`.
-2. **Dónde colocarlo**: segundo nodo independiente en `/obj/geo1`, sin input. Alimenta el input 2 de `bullet_cutter`.
-3. **Pestaña/parámetro/valor**: pestaña *Transform* → `Radius` (base) = `0.02`, `Radius` (top) = `0.015`; `Height` = `0.13`. Posicionar/rotar para que continúe exactamente desde el vértice de `crater_cone` (mismo eje, mismo ángulo, arrancando donde termina el cono).
-4. **VEX**: no aplica.
-5. **Qué ver en el viewport**: un cilindro delgado y largo que se hunde más profundo en el muro, como la continuación del túnel de bala tras el cráter cónico.
-
-### Nodo: bullet_cutter
-
-1. **Nombre exacto en Tab menu**: `Boolean`. *(verificado: sidefx.com/docs/houdini/nodes/sop/boolean.html)*
-2. **Dónde colocarlo**: dentro de `/obj/geo1`. Input 1 (`Set A`) = `crater_cone`; Input 2 (`Set B`) = `tunnel`.
-3. **Pestaña/parámetro/valor**: pestaña *Boolean* → `Operation` = `Union`. Los valores exactos del dropdown de `Operation` son `Union`, `Intersect`, `Subtract`, `Shatter`, `Seam`, `Custom`, `Detect`, `Resolve` *(verificado: sidefx.com/docs/houdini/nodes/sop/boolean.html)*.
-4. **VEX**: no aplica.
-5. **Qué ver en el viewport**: un único sólido cerrado que combina el cono ancho y el cilindro delgado en una sola forma continua tipo "bala fantasma" — sin costuras abiertas ni geometría duplicada.
-
-### Nodo: entry_hole
-
-1. **Nombre exacto en Tab menu**: `Boolean`.
-2. **Dónde colocarlo**: dentro de `/obj/geo1`. Input 1 (`Set A`) = `wall_base`; Input 2 (`Set B`) = `bullet_cutter`.
-3. **Pestaña/parámetro/valor**: pestaña *Boolean* → `Operation` = `Subtract`. Si quieres además marcar la costura de corte como grupo (no imprescindible para el resto del grafo, es solo para QA visual), en la pestaña *Output* activa el checkbox `A-B seams` dentro de la sección **Output Edge Groups** *(verificado: sidefx.com/docs/houdini/nodes/sop/boolean.html — la sección se llama literalmente "Output Edge Groups" y el checkbox correspondiente a la intersección A∩B es "A-B seams")*.
-   **Aclaración importante para no confundir**: el grupo `A-B seams` de este Boolean es solo el borde de corte del hueco de bala — **no tiene nada que ver** con el grupo `interior` que se usa en Fases 3 y 4. Ese grupo `interior` se genera después, en el nodo `fractured_wall` (Voronoi Fracture SOP, parámetro `Interior Group`, ver más abajo). Son dos grupos completamente distintos con propósitos distintos.
-4. **VEX**: no aplica.
-5. **Qué ver en el viewport**: el muro completo con un hueco tipo cráter+túnel excavado en la cara frontal, siguiendo la forma de `bullet_cutter`. El muro sigue siendo una sola pieza sólida, todavía sin fracturar.
-
-### Nodo: fracture_points
-
-1. **Nombre exacto en Tab menu**: `Voronoi Fracture Points`. *(verificado: sidefx.com/docs/houdini/nodes/sop/voronoifracturepoints.html — no existe ambigüedad de versión "2.0" para este SOP en la documentación consultada)*.
-2. **Dónde colocarlo**: dentro de `/obj/geo1`. Este nodo tiene **3 inputs** *(verificado en la doc oficial)*: Input 1 = *Geometry for Impact* (geometría alrededor de la cual generar puntos de fractura) → conectar `entry_hole`; Input 2 = *Impact Points and Metaballs* (puntos que representan "impactos") → conectar `impact_point`; Input 3 = *Optional SDF For Depth Sampling* (opcional, no se usa en este shot).
-3. **Pestaña/parámetro/valor**:
-   - No existe un parámetro literal llamado "Impact Point" — la posición de impacto se define puramente por la posición del punto conectado en el Input 2 *(verificado: sidefx.com/docs/houdini/nodes/sop/voronoifracturepoints.html)*. Es decir, `impact_point` (el Null) hace ese trabajo simplemente por estar conectado ahí.
-   - `Impact Radius` ≈ `0.6` *(nombre de parámetro verificado; el valor 0.6 es el ya decidido en la guía maestra, coherente con `impact_radius` usado en Fase 2)*.
-   - `Compute Number of Points` = ON *(verificado, nombre exacto)*.
-   - Densidad por región: el nodo organiza los controles de densidad en tres bloques — **Surface**, **Interior**, **Exterior** — cada uno con su propio parámetro `Point Density` *(verificado: sidefx.com/docs/houdini/nodes/sop/voronoifracturepoints.html)*. Para lograr piezas pequeñas cerca del impacto y grandes hacia los bordes: sube `Point Density` en el bloque **Surface** (que es la región alrededor del punto de impacto/superficie de contacto) y baja `Point Density` en **Interior**/**Exterior** (a ojo, ajustar viendo el resultado — el material fuente no da valores numéricos exactos para este reparto, solo la intención de densidad no uniforme).
-4. **VEX**: no aplica.
-5. **Qué ver en el viewport**: una nube de puntos dispersos sobre y alrededor del hueco de bala — puntos muy juntos cerca de `impact_point` y cada vez más espaciados hacia los bordes del muro. Actívese `Visualize Points` para verlos coloreados por región (Surface/Interior/Exterior) si hace falta depurar.
+1. **Nombre exacto en Tab menu**: `Attribute Wrangle`.
+2. **Dónde colocarlo**: dentro de `/obj/geo1`, input = `scatter1`. Alimenta el input 2 de `fractured_wall`.
+3. **Pestaña/parámetro/valor**: pestaña *Wrangle* → `Run Over` = `Points`.
+4. **Código VEX** (verificado, funcionando en Houdini; `impact_pos` es un literal copiado a mano de la posición de `sphere1`, no una lectura dinámica del nodo):
+```vex
+vector impact_pos = {0, 1.7, -0.1};
+float dist = distance(@P, impact_pos);
+float t = clamp(dist / 1.0, 0, 1);
+float keep_prob = pow(1 - t, 4);
+if (rand(@ptnum) > keep_prob)
+    removepoint(0, @ptnum);
+```
+   Cómo funciona: `keep_prob` vale 1 justo en el punto de impacto (`dist=0`) y cae a 0 en un radio de 1 unidad, con una caída muy pronunciada por el exponente 4 (`pow(1-t, 4)`). Cada punto se queda solo si un número aleatorio (`rand(@ptnum)`) es menor o igual que su `keep_prob` — así los puntos cerca del impacto casi siempre sobreviven y los lejanos casi nunca.
+5. **Qué ver en el viewport**: de los 2000 puntos originales, sobreviven **~65 puntos** (verificado en Houdini), muy concentrados alrededor de `sphere1` y cada vez más escasos hacia los bordes del muro.
 
 ### Nodo: fractured_wall
 
 1. **Nombre exacto en Tab menu**: `Voronoi Fracture`. *(verificado: sidefx.com/docs/houdini/nodes/sop/voronoifracture.html)*
-2. **Dónde colocarlo**: dentro de `/obj/geo1`. Este nodo tiene **2 inputs** *(verificado)*: Input 1 = *Geometry to Fracture* → conectar `entry_hole`; Input 2 = *Points for Voronoi Cells* → conectar `fracture_points`.
+2. **Dónde colocarlo**: dentro de `/obj/geo1`. Este nodo tiene **2 inputs** *(verificado)*: Input 1 = *Geometry to Fracture* → conectar `box1` directamente (no hay agujero de bala previo que cortar); Input 2 = *Points for Voronoi Cells* → conectar `attribwrangle1`.
 3. **Pestaña/parámetro/valor**:
    - Sección **Cut** → `Cut Plane Offset` ≈ `0.002` *(nombre de parámetro verificado: "Offsets the cut plane between adjacent cell points before cutting", sidefx.com/docs/houdini/nodes/sop/voronoifracture.html)*.
    - Sección **Output Attributes** → `Interior Group` = deja el nombre por defecto o escribe `interior` explícitamente *(verificado: el parámetro se llama literalmente "Interior Group" y vive en la sección "Output Attributes")*. Este es el grupo real de caras interiores que se reutiliza en Fase 3 (`debris_source`) y Fase 4 (`rbd_interior_detail`, `chip_scatter`).
    - Sección **Pieces** → deja `Name Attribute` por defecto (crea el atributo `name` por pieza, usado en todo el resto del pipeline).
 4. **VEX**: no aplica.
-5. **Qué ver en el viewport**: el muro fracturado en múltiples piezas irregulares tipo Voronoi — piezas pequeñas y numerosas alrededor del hueco de bala, piezas grandes y pocas hacia los bordes del muro. Las piezas siguen encajadas en su posición original (todavía sin simular), como un rompecabezas 3D.
+5. **Qué ver en el viewport**: el muro fracturado en ~65 piezas irregulares tipo Voronoi — piezas pequeñas y numerosas alrededor de `sphere1` (el punto de impacto), piezas grandes y pocas hacia los bordes del muro. Las piezas siguen encajadas en su posición original (todavía sin simular), como un rompecabezas 3D. No hay ningún hueco ni cráter cortado — la concentración de piezas pequeñas es lo único que "lee" como impacto en esta fase.
 
 ### Nodo: color_by_piece (opcional, solo QA)
 
@@ -94,13 +74,13 @@ Contexto de red: todo dentro de un Geometry object, p.ej. `/obj/geo1`. Grafo: `w
 
 1. **Nombre exacto en Tab menu**: `Camera` (se crea normalmente desde el menú *Object* del Tab menu, no dentro de `/obj/geo1` sino como hijo de `/obj`).
 2. **Dónde colocarlo**: `/obj/cam1`, nodo de cámara independiente.
-3. **Pestaña/parámetro/valor**: pestaña *Transform* → `Translate` ≈ `(0.9, 1.6, -3.2)`; orientar (look-at) hacia `impact_point`; pestaña *Projection* → `Focal Length` entre `35` y `50` mm (a ojo, ajustar en iteración según encuadre).
+3. **Pestaña/parámetro/valor**: pestaña *Transform* → `Translate` ≈ `(0.9, 1.6, -3.2)`; orientar (look-at) hacia `sphere1` (posición real `(0, 1.7, -0.1)`); pestaña *Projection* → `Focal Length` entre `35` y `50` mm (a ojo, ajustar en iteración según encuadre).
 4. **VEX**: no aplica.
-5. **Qué ver en el viewport de la cámara**: el muro fracturado encuadrado con el hueco de bala como punto focal, ligeramente descentrado en composición, con perspectiva creíble para un plano medio de impacto.
+5. **Qué ver en el viewport de la cámara**: el muro fracturado encuadrado con la zona de piezas pequeñas (el impacto) como punto focal, ligeramente descentrado en composición, con perspectiva creíble para un plano medio de impacto.
 
 ### Checkpoint de la Fase 1
 
-Al completar la fase deberías ver en el viewport: un muro de hormigón (4×3×0.25m) con un hueco de entrada de bala en la cara frontal, fracturado en piezas Voronoi de densidad no uniforme — muchas piezas pequeñas concentradas alrededor del punto de impacto, pocas piezas grandes hacia los bordes del muro. Todas las piezas siguen en su posición de reposo (nada se ha movido todavía), encajadas como un rompecabezas. Con `color_by_piece` activado cada pieza tiene un color distinto y no hay fusiones erróneas entre piezas adyacentes. La cámara `cam1` encuadra el impacto desde un ángulo de plano medio.
+Al completar la fase deberías ver en el viewport: un muro de hormigón (4×3×0.25m, base en Y=0) fracturado en ~65 piezas Voronoi de densidad no uniforme — muchas piezas pequeñas concentradas alrededor de `sphere1` (posición `(0, 1.7, -0.1)`), pocas piezas grandes hacia los bordes del muro. No hay ningún hueco booleano cortado — la lectura de "impacto" viene solo de la concentración de piezas. Todas las piezas siguen en su posición de reposo (nada se ha movido todavía), encajadas como un rompecabezas. Con `color_by_piece` activado cada pieza tiene un color distinto y no hay fusiones erróneas entre piezas adyacentes. La cámara `cam1` encuadra el impacto desde un ángulo de plano medio.
 
 ---
 
@@ -124,14 +104,14 @@ Contexto de red: sigue dentro de `/obj/geo1`, encadenado después de `fractured_
 
 ### Nodo: impact_kinematics
 
-**Antes de pegar el código**: el material fuente original de este wrangle tiene una inconsistencia real — usa `@impact_point` en la línea de `dist` y `impact_pos` (sin `@`, sin declarar) en la línea de `toward`. Estas dos referencias deberían apuntar a la MISMA posición: la del Null `impact_point` creado en la Fase 1. Houdini no va a compilar el VEX tal cual porque `impact_pos` no existe como variable. La forma más simple y estándar de traer la posición de un Null externo a un Attribute Wrangle es conectando ese Null como **segundo input** del wrangle y leyendo su posición con `point(1, "P", 0, 0)` (input 1 en notación 0-indexed de VEX = segundo input del nodo). Con eso, el código queda funcional sustituyendo ambas referencias por una única variable local `impact_pos` calculada al principio del snippet. Este es el fix aplicado abajo — está señalado explícitamente, no es el código original sin tocar.
+**Actualización tras verificar Fase 1 en Houdini**: la Fase 1 real no tiene un Null `impact_point` conectable como segundo input — el punto de impacto es `sphere1`, un objeto puramente visual que no se conecta al grafo de fractura. Siguiendo el mismo patrón ya usado en `attribwrangle1` (Fase 1), `impact_pos` se declara aquí como **literal VEX**, copiado a mano de la posición real de `sphere1`: `(0, 1.7, -0.1)`. Esto reemplaza el fix anterior de este documento (que proponía leer la posición desde un segundo input con `point(1, "P", 0, 0)`) — no hace falta un segundo input en este wrangle.
 
 1. **Nombre exacto en Tab menu**: `Attribute Wrangle`.
-2. **Dónde colocarlo**: dentro de `/obj/geo1`. Input 1 = `piece_centroid`. Input 2 = `impact_point` (el Null de la Fase 1) — **hay que conectar este segundo input**, si no, `point(1, "P", 0, 0)` no tiene de dónde leer.
+2. **Dónde colocarlo**: dentro de `/obj/geo1`. Input 1 = `piece_centroid`. Sin segundo input — `impact_pos` va como literal en el código.
 3. **Pestaña/parámetro/valor**: pestaña *Wrangle* → `Run Over` = `Points`.
-4. **Código VEX** (versión corregida, con el fix de `impact_pos` aplicado y explicado arriba; pega esto, no el snippet roto):
+4. **Código VEX** (con `impact_pos` real de Fase 1; pega esto):
 ```vex
-vector impact_pos = point(1, "P", 0, 0);
+vector impact_pos = {0, 1.7, -0.1};
 
 float dist = distance(@centroid, impact_pos);
 float impact_radius = 0.6;
@@ -149,7 +129,7 @@ i@active = (dist < active_radius) ? 1 : 0;
 f@t = t;   // fix necesario: exportar t como atributo de punto para que constraint_strength pueda leerlo (ver más abajo)
 ```
    Nota sobre la última línea (`f@t = t;`): en el material fuente original, `t` se calcula como variable local (`float t = ...`) y nunca se exporta como atributo. El wrangle de más abajo (`constraint_strength`) necesita leer `t` con `point(0,"t",@primnum,0)`, lo cual solo funciona si `t` existe como atributo de punto float en la geometría de salida de este nodo. Por eso se añade `f@t = t;` al final — es un fix, no estaba en el snippet original tal cual.
-5. **Qué ver en el viewport**: sin cambio de forma geométrica todavía (esto solo asigna atributos, no mueve nada — el movimiento lo aplica el solver más adelante). Para verificar que funcionó, revisa en el spreadsheet que las piezas cercanas a `impact_point` tengan `speed` alto (~60) y las piezas lejanas `speed` bajo (~4), y que `active` sea 1 dentro de un radio de 0.8m alrededor del impacto y 0 fuera de ese radio.
+5. **Qué ver en el viewport**: sin cambio de forma geométrica todavía (esto solo asigna atributos, no mueve nada — el movimiento lo aplica el solver más adelante). Para verificar que funcionó, revisa en el spreadsheet que las piezas cercanas a `(0, 1.7, -0.1)` tengan `speed` alto (~60) y las piezas lejanas `speed` bajo (~4), y que `active` sea 1 dentro de un radio de 0.8m alrededor del impacto y 0 fuera de ese radio.
 
 ### Nodo: connect_adjacent_pieces
 

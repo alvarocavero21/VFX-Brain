@@ -20,6 +20,11 @@ Full-page snap scroll con 4 secciones:
 - Proyectos con vídeo real embebido vía YouTube:
   - Ferrari / Ship Compo (YouTube ID: `Y6ztIPGr6_Q`)
   - Nature Takeover (YouTube ID: `ECXjw5t7fQI`)
+  - Ground Destruction — RBD fractura de suelo, Houdini + Karma (YouTube ID: `EDasAkp61AU`, título en YouTube: "Floor Fracture") — añadido 2026-09-28
+  - City Mustang — Unreal Engine + Nuke, categoría "UNREAL ENGINE" (YouTube ID: `5OiXs6pik64`) — añadido 2026-09-28, junto con esa nueva categoría de filtro
+- Proyectos definidos en el array `projects` de `components/Projects.tsx`; añadir uno nuevo = nueva entrada con `youtubeId`.
+- Repo: `github.com/alvarocavero21/AlvaroCaveroVFX`, clon local en `C:\Users\alvar\Documents\AlvaroCaveroVFX`. Push a `main` → Vercel despliega solo (~40 s).
+- La lista de Work hace scroll interno (también con swipe en móvil); desde 1280 px se ve en 3 columnas.
 - Contacto: `alvarocavero21@gmail.com`, LinkedIn `https://www.linkedin.com/in/alvaro-cavero/`
 
 ## Efectos de animación implementados
