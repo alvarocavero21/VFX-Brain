@@ -18,5 +18,16 @@
 - NukeX incluye BigCat (extensión de CopyCat para entrenar modelos de ML propios con datasets grandes)
 - Compatible con VFX Reference Platform 2025, USD 25.08
 
+## Unreal Engine 5.8 (junio 2026 — última versión mayor de UE5)
+- Movie Render Graph **Production Ready** (Light Modifier por render layer, Accumulation DOF)
+- MegaLights **Production Ready** (area lights con sombras suaves, IES en volumétricos, cloud shadows)
+- Lumen Lite (Beta) — GI media ~2× más rápida, para viewport/juego
+- Mesh Terrain, Procedural Vegetation Editor, FSSS (niebla), MetaHuman Crowd → Experimental
+- PCG: edición manual no destructiva, atributos complejos, subgrafos embebidos
+- X-Rite AxF → Substrate production ready
+- MCP Server (Experimental) para conectar LLMs al editor
+- Detalle completo: `07_Unreal_Engine/UE58_Novedades_Clave.md`
+- ⚠️ Pendiente confirmar: ¿instalado en laptop, desktop o ambas?
+
 ## Regla de uso
 Antes de sugerir un nodo, parámetro o workflow específico de versión, verificar contra este documento. Si hay duda sobre si una feature existe en la versión instalada, preguntar al usuario antes de asumir, en vez de dar por hecho comportamiento de versiones anteriores o posteriores.
