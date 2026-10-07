@@ -59,4 +59,4 @@ Sensor 16:9 Digital Film (23.76 × 13.365 mm), 35 mm, f/2.8, foco manual 600 cm,
 - [ ] Comprobar en `LV_Lookdev` la exposición (bola gris ≈ gris medio) y ajustar si hace falta.
 - [ ] Movie Render Queue → añadir `SEQ_Lookdev` → elegir `MRG_Cine_Final` → render de prueba → abrir en Nuke.
 - [ ] Instalar EasyToolbag cuando lo compre (Fab → Install to Engine 5.8) y añadir al proyecto.
-- [ ] Decidir si conectar el MCP de UE a Claude Code.
+- [x] MCP: conectado y luego **desconectado** el 2026-10-07 (plugins desactivados en el .uproject, autostart OFF, `.mcp.json` borrado). Álvaro ejecuta; Claude solo guía.

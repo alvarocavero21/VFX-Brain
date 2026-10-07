@@ -1,3 +1,5 @@
 ﻿.obsidian/
 *.tmp
-07_Unreal_Engine/scripts/ue_mcp_session.txt
+
+# Conversaciones personales de claude.ai: solo en local, nunca al remoto
+Claude/

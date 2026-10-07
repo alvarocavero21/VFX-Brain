@@ -52,6 +52,15 @@ Post Process Volume (Unbound) → Exposure:
 - **Noche**: luna fría con poca intensidad + **luces prácticas cálidas** (farolas, ventanas) → contraste de temperatura. Con lluvia: contraluz obligatorio (ver EasyRain en [[Fab_Easy_Tools_William_Faucher]]).
 - **Interior**: luz entrando por ventana (sol + skylight), resto rebote. Rect lights invisibles en ventanas para ayudar a Lumen si hace falta.
 
+### Valores de partida concretos (estudio del 2026-10-07, sin validar con render)
+Para los tres casos: cámara f/2.8 fija (no cambia la DOF) y exposición con ISO/obturador. Regla rápida: gris medio ≈ 0,125 · 2^EV nits; iluminancia ≈ 2,5 · 2^EV lux.
+| Look | Key | Cielo / ambiente | Niebla | Cámara (EV100) |
+|---|---|---|---|---|
+| Golden hour | Sol 100.000 lux *atmosphere sun light* (la atmósfera lo atenúa y calienta sola), elevación 5°, contraluz lateral justo fuera de cuadro, source angle 1° | Sky Atmosphere + Sky Light real-time | Volumétrica, scattering 0,7 hacia delante (halo a contraluz), inscattering cálido ~250 nits | ISO 100, 1/500 (EV ≈ 11,9) |
+| Overcast | Key de 1.500 lux muy suave (source angle 20°), 6.800 K, sin atmósfera | Cúpula emisiva gris ~2.000 nits con `is_sky`, capturada por la Sky Light (≈ 6.000 lux de ambiente) | Densa (0,06), gris frío ~1.200 nits | ISO 100, 1/250 (EV ≈ 10,9) |
+| Noche | "Luna de cine": 15 lux azulada (la real son ~0,3 lux; en rodaje se usa un HMI con gel azul) | Cúpula azul oscuro ~0,4 nits | Ligera, azul ~0,3 nits | ISO 3200, 1/50 (EV ≈ 3,6) |
+| Práctica nocturna | Farol de 800 lm a 2.700 K (~64 lux a 1 m) más una esfera emisiva visible (la point light no se ve en cámara) | — | Volumetric scattering ×2 en la luz para el halo | — |
+
 ## 7. Lenguaje de luz (lo que separa "bonito" de "cine")
 - Ratio key/fill definido (dramático 4:1–8:1).
 - Motivar cada luz: toda fuente debe tener una justificación en el mundo.

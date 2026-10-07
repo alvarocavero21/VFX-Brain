@@ -1,31 +1,37 @@
-# Puente Houdini → Unreal
-Tags: #unreal #houdini #pipeline #vdb #usd #niagara
+# Puente Houdini → Unreal (índice)
+Tags: #unreal #houdini #pipeline #vdb #usd #niagara #moc
 Volver: [[00_MOC_Unreal]]
 
 Mi ventaja competitiva: sé hacer FX hero en Houdini. UE pone el entorno, la luz y el render rápido; Houdini pone la destrucción, el pyro y el agua.
+Guía detallada (investigada y verificada contra Houdini 22.0.429 + UE 5.8.2 el 2026-10-07) en la carpeta `Houdini_a_UE/`:
 
-## Opciones según el tipo de FX
+1. [[HtoUE_00_Setup_Herramientas]] — qué instalar (Houdini Engine **v4.0.1**, SideFX Labs, plugin Interchange OpenVDB), unidades/ejes, reglas comunes
+2. [[HtoUE_01_Pyro_VDB_Heterogeneous_Volumes]] — pyro/humo/fuego como volumen en UE: campos, material, actor, CVars cinemáticas, problemas conocidos
+3. [[HtoUE_02_RBD_Destruccion]] — Alembic Geometry Cache (recomendado), Chaos Geometry Collection, VAT 3.0, RBD to FBX
+4. [[HtoUE_03_Houdini_Engine_FLIP_Particulas_USD]] — HDAs en UE, agua FLIP, partículas → Niagara, USD y cámaras
 
-| FX de Houdini | Cómo llevarlo a UE | Notas |
+## Resumen: qué método por tipo de FX
+| FX de Houdini | Método principal | Alternativa |
 |---|---|---|
-| Pyro / humo / explosión (VDB) | **Heterogeneous Volumes**: importar secuencia OpenVDB como Sparse Volume Texture y renderizar con el actor Heterogeneous Volume | Lo más fiel para cinemática. Pesado en VRAM: reducir resolución/campos (density, temperature, flame). Probar con Path Tracer y Lumen |
-| RBD / destrucción | **Alembic (Geometry Cache)** o huesos (Labs RBD to FBX → skeletal mesh) | Alembic = fácil y fiel; huesos = más ligero. Piezas con Nanite si son muchas |
-| Destrucción ligera / muchas piezas | **VAT (Vertex Animation Textures)** con SideFX Labs | Muy eficiente, ideal para debris secundario |
-| Partículas (chispas, debris fino, polvo) | **Houdini Niagara plugin** (point cache → Niagara) | Combinar con EasyAtmos para el ambiente |
-| FLIP / agua | Malla Alembic + material agua en UE, o render del agua en Karma y compo | Shading de agua realista en UE es exigente; evaluar caso a caso |
-| Assets procedurales / terreno | **Houdini Engine for Unreal** (HDAs dentro de UE) o export a USD/FBX | Heightfield → mesh Nanite para terrenos hero |
-| Escena / layout | **USD** (Solaris → UE, USD Stage / Interchange; asset import production ready en 5.8) | Útil para mantener layout sincronizado con Solaris |
+| Pyro / humo / explosión | VDB → **Heterogeneous Volume** (experimental) | Render en **Karma** + compo Nuke |
+| RBD / destrucción (cinemática) | **Alembic → Geometry Cache** con motion vectors | VAT rigid / RBD to FBX |
+| Destrucción en tiempo real | Fractura Houdini → **Chaos Geometry Collection** (vía HDA) | Fractura de UE |
+| Debris / chispas / ceniza | Puntos → **Niagara** o VAT Particle Sprites | Niagara puro en UE |
+| FLIP / agua hero | Malla **Alembic** + material de agua | **Karma + compo** (mejor calidad) |
+| Herramientas / terreno procedural | **Houdini Engine** (HDA) → bake | Export FBX/USD |
+| Layout de escena / cámaras | **USD** / FBX de cámara | — |
 
 ## Reglas de oro
-- **Escala**: Houdini metros, UE centímetros (×100). Revisar ejes (Y-up vs Z-up) al exportar.
-- **Frame rate**: sim a 24 fps igual que la Sequence.
-- **Motion blur**: en VDB/Alembic necesito velocidades (`v`) o subframes; comprobar que MRG genera blur real con temporal samples.
-- **Iluminación coherente**: si el FX se renderiza en Karma y el fondo en UE, replicar sol/HDRI/cámara exactos (exportar cámara de UE a Houdini vía USD/FBX).
-- Cada problema de importación que cueste >15 min → [[06_Problemas_Resueltos]].
+- **Escala y ejes**: Houdini m + Y-up → UE cm + Z-up. Test con cubo de 1 m antes de exportar nada gordo.
+- **24 fps** en Houdini y en Sequencer.
+- **Motion blur**: Alembic con `v` → motion vectors en el import; volúmenes: comprobar si interpolan en sub-frames (pendiente).
+- **Iluminación coherente** si mezclo Karma y UE: mismo sol, misma cámara exportada.
+- Atasco >15 min → [[06_Problemas_Resueltos]].
 
 ## Alternativa híbrida (muchas veces la mejor para portfolio)
-Entorno + cámara en UE → exportar cámara → FX renderizado en Karma XPU → integrar en Nuke. Así el FX mantiene la calidad Karma y el entorno el realismo/rapidez de UE.
+Entorno + cámara en UE → exportar cámara → FX en Karma XPU con holdouts → integrar en Nuke. El FX conserva la calidad de Karma y el entorno la rapidez de UE.
 
-## Pendiente (Fase 5 del roadmap)
-- [ ] Probar un VDB de pyro (Shot 1 dragón) como Heterogeneous Volume en UE 5.8 y anotar VRAM/tiempos en laptop vs desktop.
-- [ ] Probar Alembic del muro del Shot 2 ([[Shot2_Bullet_Wall]]) en UE.
+## Pruebas pendientes (Fase 5 del roadmap)
+- [ ] Instalar Houdini Engine v4.0.1 + SideFX Labs y comprobar la licencia de Engine.
+- [ ] VDB de pyro de prueba → UE 5.8: confirmar escala/ejes, si `vel` sigue crasheando y si hay motion blur entre frames. Anotar VRAM/tiempos laptop vs desktop.
+- [ ] Alembic del muro del Shot 2 ([[Shot2_Bullet_Wall]]) como Geometry Cache con motion vectors.

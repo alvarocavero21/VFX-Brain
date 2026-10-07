@@ -2,6 +2,11 @@
 Tags: #unreal #mcp #claude-code #automatizacion #ue58
 Volver: [[00_MOC_Unreal]] · Relacionado: [[Pipeline_ComfyUI_ClaudeCode_MCP]]
 
+> [!warning] Desconectado el 2026-10-07 por decisión de Álvaro
+> Claude **no** controla Unreal. Álvaro hace las cosas en el editor y Claude le explica cómo hacerlas y le da tips.
+> Se borró `.mcp.json` del vault y el cliente `scripts/ue_mcp.js`. En `UE58_Cine_Template` se desactivaron los plugins MCP y el autostart.
+> Esta nota queda solo como referencia de lo que es el plugin.
+
 Investigado leyendo el código fuente del plugin (`Engine/Plugins/Experimental/ModelContextProtocol`) y probándolo en vivo el 2026-10-07.
 
 ## Qué es
@@ -31,7 +36,7 @@ Crea `.mcp.json` en la raíz del vault (ya hecho). Las herramientas aparecen **a
 - `initialize` devuelve cabecera **`Mcp-Session-Id`**; todas las peticiones siguientes deben llevarla (si falta → 400).
 - Valida `Origin` (anti DNS-rebinding): solo localhost o sin Origin.
 - Con `bEnableToolSearch=True` (default) solo expone **3 meta-tools**: `list_toolsets`, `describe_toolset`, `call_tool`. El LLM descubre el resto bajo demanda (ahorra contexto).
-- Cliente mínimo de prueba sin Claude Code: [[scripts/ue_mcp.js]] (`node ue_mcp.js tools` / `node ue_mcp.js call <tool> '<json>'`).
+- (Había un cliente de prueba en Node, `scripts/ue_mcp.js`; borrado el 2026-10-07.)
 
 ## Qué puede hacer (toolsets probados con mi plantilla)
 | Toolset | Para qué me sirve |

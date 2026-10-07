@@ -38,7 +38,7 @@ Volver: [[00_MOC_Unreal]] · Relacionado: [[Tecnica_Nave_Aterrizando_Thrusters_P
 | **ChaosNiagara** | Beta | Leer datos de destrucción Chaos → polvo/debris secundario al romperse |
 | **PCGNiagaraInterop** | Experimental | PCG ↔ Niagara |
 | **Cascade→Niagara converter** | Beta | Migrar sistemas viejos de Cascade |
-| **NiagaraToolsets** (MCP) | Experimental | Claude puede crear/editar sistemas vía [[MCP_Unreal_ClaudeCode]] |
+| **NiagaraToolsets** (MCP) | Experimental | Existe, pero no se usa: el MCP está desconectado ([[MCP_Unreal_ClaudeCode]]) |
 
 Plantillas incluidas en el engine (`Niagara/Content/DefaultAssets/Templates/Systems`): DirectionalBurst, RadialBurst, SimpleExplosion, Fountain/Minimal **Lightweight**, AttributeReaderTrails… + emisores y "BehaviorExamples".
 

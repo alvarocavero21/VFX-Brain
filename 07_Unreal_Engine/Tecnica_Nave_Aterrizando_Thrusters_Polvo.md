@@ -35,4 +35,4 @@ Aterrizajes de **SpaceX Falcon 9 / Starship**, helicópteros sobre arena (*brown
 4. Sequencer: keys de `Power`; `Altitude` calculado en el BP cada tick (trace al suelo).
 5. Pasar [[Checklist_Critico_Realismo_UE]] → render con `MRG_Cine_Final` ([[UE58_Cine_Template]]).
 
-Con el MCP ([[MCP_Unreal_ClaudeCode]]) Claude puede crear el sistema Niagara y los materiales directamente; la animación va por Python/Sequencer.
+Montaje: lo hace Álvaro a mano en el editor, con Claude guiando paso a paso (el MCP está desconectado por decisión suya).

@@ -52,3 +52,26 @@ Y el código fuente C++ (`Engine/Source`, `Engine/Plugins/**/Source`) es la refe
 | `r.HeterogeneousVolumes` | 1 | VDB/Sparse Volume Textures |
 | `r.Lumen.HeightFog` | 1 | la niebla recibe GI de Lumen |
 | `r.AntiAliasingMethod` | 4 | TSR |
+
+## Aprendido el 2026-10-07 (estudio de iluminación, Fase 2)
+### Migrar assets entre proyectos sin abrir el editor
+- `unreal.AssetToolsHelpers.get_asset_tools().migrate_packages(paquetes, "C:/.../OtroProyecto/Content", opts)` con `opts = unreal.MigrationOptions()`, `prompt=False`, `ignore_dependencies=False`.
+- Se ejecuta **en el proyecto origen** (headless con `-run=pythonscript`). Copia también todas las dependencias (master materials, texturas, physmats) y mantiene las rutas `/Game/...`, así que las referencias no se rompen. **No copiar `.uasset` a mano**: las MI de Megascans dependen de masters en `/Game/Custom/...` y `/Game/MSPresets`.
+- Megascans locales: `ElectricDreamsEnv/Content/Megascans` (3D_Assets, 3D_Plants, Decals, Surfaces), todo en Nanite. Migrar 20 mallas con sus dependencias ocupó unos 2 GB.
+- `StaticMesh.get_bounding_box()` da el tamaño en cm, útil para componer a ciegas.
+
+### Logs en modo headless
+- `unreal.log()` **no sale por stdout** en el commandlet. Para verlo, leer `<Proyecto>/Saved/Logs/<Proyecto>.log` y filtrar por un prefijo (`[VFXBrain]`).
+
+### Render de Movie Render Graph por línea de comandos
+- `-MoviePipelineConfig=` acepta **una Queue o una PrimaryConfig antigua, no un MovieGraphConfig** (verificado en `MovieRenderPipelineCommandLine.cpp`). Si el job lleva un graph preset, el executor cambia solo a `UMovieGraphPipeline`.
+- Truco: crear la cola en Python (`unreal.new_object(unreal.MoviePipelineQueue)` → `allocate_new_job` → `job.map`, `job.sequence`, `job.set_graph_preset(graph)`), guardarla con `unreal.MoviePipelineEditorLibrary.save_queue_to_manifest_file(queue)` (escribe un `.utxt`) y lanzar:
+  `UnrealEditor.exe <uproject> -game -MoviePipelineConfig="<ruta>.utxt" -windowed -resx=1280 -resy=720 -log -notexturestreaming`
+- La primera vez compila shaders y crece la caché global `%LOCALAPPDATA%/UnrealEngine/Common/DerivedDataCache` (se puede borrar sin problema, solo se regenera).
+
+### Nombres de propiedades verificados en 5.8
+- Niebla: `fog_inscattering_luminance` (la antigua `FogInscatteringColor` está deprecated), `volumetric_fog_scattering_distribution`, `volumetric_fog_albedo` (**FColor**), `volumetric_fog_extinction_scale`.
+- Luces: `use_temperature` + `temperature`, `diffuse_scale`, `specular_scale`. `light_color` es **FColor**: `unreal.Color(r=, g=, b=, a=255)` (`LinearColor` no tiene `to_fcolor` en Python).
+- Point light en lúmenes: `intensity_units=unreal.LightUnits.LUMENS`.
+- Material de cielo: `bIsSky` → `is_sky=True`. Con eso, una cúpula emisiva la captura la Sky Light en real-time capture (sirve para un overcast sin HDRI).
+- Materiales por script: `MaterialEditingLibrary.create_material_expression` / `connect_material_property` / `recompile_material`. Las fábricas son `MaterialFactoryNew` y `MaterialInstanceConstantFactoryNew`.
