@@ -40,3 +40,7 @@ RealVisXL V4.0 — buen punto de partida para fotorealismo en img2img sobre rend
 
 ## Aplicación al portfolio
 Este pipeline es para POST-PROCESO estilístico, no para generar los shots del portfolio en sí — recordar que en el reel de portfolio se debe evitar meter IA generativa salvo que sea el punto explícito del shot, ya que lo que se evalúa es la capacidad de simulación real, no de generación con difusión.
+
+## Ver también
+- [[ComfyUI_Pinokio_Setup_y_Modelos]]: estado actual de la instalación (Pinokio, FLUX, sin MCP).
+- [[FLUX_img2img_ControlNet_Inpaint_por_Recorte]]: workflow concept → foto con FLUX.

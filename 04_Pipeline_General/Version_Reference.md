@@ -29,5 +29,12 @@
 - Detalle completo: `07_Unreal_Engine/UE58_Novedades_Clave.md`
 - ⚠️ Pendiente confirmar: ¿instalado en laptop, desktop o ambas?
 
+## ComfyUI 0.37.0 (laptop, instalado con Pinokio) — verificado 2026-10-10
+- PyTorch 2.7.0+cu128, Python 3.10.20, frontend 1.53.6. Custom nodes: ComfyUI-Manager, comfyui_controlnet_aux
+- Modelos: FLUX.1-dev fp8 y FLUX.1-schnell fp8 (checkpoints todo en uno), ControlNet Union Pro 2.0 (FLUX), 4x-UltraSharp. **Sin SDXL ni FLUX Fill**
+- Con FLUX: scheduler `simple`/`beta` (no karras) y CFG vía `FluxGuidance` con el CFG del KSampler a 1
+- Detalle: `03_ComfyUI/GPU_Pipeline_Notes/ComfyUI_Pinokio_Setup_y_Modelos.md`
+- ⚠️ Desktop: sin verificar qué hay instalado
+
 ## Regla de uso
 Antes de sugerir un nodo, parámetro o workflow específico de versión, verificar contra este documento. Si hay duda sobre si una feature existe en la versión instalada, preguntar al usuario antes de asumir, en vez de dar por hecho comportamiento de versiones anteriores o posteriores.
